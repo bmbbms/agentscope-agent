@@ -103,6 +103,16 @@ button:disabled {
   gap: 10px;
 }
 
+.section {
+  display: grid;
+  gap: 10px;
+}
+
+.section-title-row h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
 .metric {
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -123,6 +133,11 @@ button:disabled {
   font-size: 28px;
   line-height: 1;
   font-weight: 700;
+}
+
+.metric.emphasis {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
 }
 
 .status-breakdown {

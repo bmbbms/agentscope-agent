@@ -66,6 +66,27 @@ class AuditIngestSessionApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot_result["session"]["session_id"], session.session_id)
         self.assertGreaterEqual(len(snapshot_result["tasks"]), 1)
 
+        task_stats_result = await api_module.get_task_stats(
+            authorization=headers["Authorization"],
+            tenant_id="merchant-data",
+            user_id="demo.user",
+        )
+        self.assertIn("total", task_stats_result)
+        self.assertIn("completion_rate", task_stats_result)
+        self.assertGreaterEqual(task_stats_result["total"], 1)
+
+        task_list_result = await api_module.list_tasks(
+            authorization=headers["Authorization"],
+            status=None,
+            tenant_id="merchant-data",
+            user_id="demo.user",
+            limit=20,
+            offset=0,
+        )
+        self.assertIn("items", task_list_result)
+        self.assertIn("count", task_list_result)
+        self.assertGreaterEqual(task_list_result["count"], 1)
+
     async def test_close_session_contract(self) -> None:
         session, _ = await self.session_manager.ensure_session_and_task(
             query="close me",

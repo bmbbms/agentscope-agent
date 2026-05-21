@@ -187,6 +187,52 @@ class SessionManager:
             "by_status": by_status,
         }
 
+    async def list_tasks(
+        self,
+        *,
+        status: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        rows = await self.repository.list_tasks(
+            status=status,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "items": rows,
+            "limit": limit,
+            "offset": offset,
+            "count": len(rows),
+        }
+
+    async def get_task_stats(
+        self,
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        by_status = await self.repository.get_task_stats(tenant_id=tenant_id, user_id=user_id)
+        total = sum(by_status.values())
+        completed = by_status.get(TaskStatus.SUCCESS.value, 0)
+        failed = by_status.get(TaskStatus.FAILED.value, 0)
+        running = by_status.get(TaskStatus.RUNNING.value, 0)
+        completion_rate = round((completed / total) * 100, 2) if total else 0.0
+        failure_rate = round((failed / total) * 100, 2) if total else 0.0
+        return {
+            "total": total,
+            "running": running,
+            "completed": completed,
+            "failed": failed,
+            "completion_rate": completion_rate,
+            "failure_rate": failure_rate,
+            "by_status": by_status,
+        }
+
     async def finalize_run(
         self,
         *,

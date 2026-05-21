@@ -137,3 +137,35 @@ async def list_sessions(
         limit=limit,
         offset=offset,
     )
+
+
+@app.get("/audit/tasks")
+async def list_tasks(
+    authorization: str | None = Header(default=None),
+    status: str | None = None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    _validate_token(authorization)
+    return await app.state.session_manager.list_tasks(
+        status=status,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/audit/tasks/stats")
+async def get_task_stats(
+    authorization: str | None = Header(default=None),
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> dict:
+    _validate_token(authorization)
+    return await app.state.session_manager.get_task_stats(
+        tenant_id=tenant_id,
+        user_id=user_id,
+    )

@@ -5,6 +5,16 @@ type SessionStatsResponse = {
   by_status: Record<string, number>;
 };
 
+type TaskStatsResponse = {
+  total: number;
+  running: number;
+  completed: number;
+  failed: number;
+  completion_rate: number;
+  failure_rate: number;
+  by_status: Record<string, number>;
+};
+
 type SessionItem = {
   session_id: string;
   tenant_id: string | null;
@@ -26,20 +36,29 @@ type SessionListResponse = {
   count: number;
 };
 
-type SessionTask = {
+type TaskItem = {
   task_id: string;
+  session_id: string;
   title: string | null;
   task_type: string | null;
   status: string;
+  waiting_state: string | null;
   assigned_agent: string | null;
   started_at: string;
   last_active_at: string;
   completed_at: string | null;
 };
 
+type TaskListResponse = {
+  items: TaskItem[];
+  limit: number;
+  offset: number;
+  count: number;
+};
+
 type SessionSnapshotResponse = {
   session: SessionItem;
-  tasks: SessionTask[];
+  tasks: TaskItem[];
 };
 
 const auditBaseUrl = (import.meta.env.VITE_AUDIT_BASE_URL as string | undefined)?.trim() || "http://127.0.0.1:8081";
@@ -56,8 +75,8 @@ app.innerHTML = `
   <main class="layout">
     <header class="topbar">
       <div>
-        <h1>Merchant Agent Audit Dashboard</h1>
-        <p class="subtext">Session-level visibility for main-agent and child-agent calls.</p>
+        <h1>Merchant Agent Operations Dashboard</h1>
+        <p class="subtext">Sessions, tasks, and completion progress for main-agent and child-agent execution.</p>
       </div>
       <div class="endpoint">${auditBaseUrl}</div>
     </header>
@@ -68,7 +87,9 @@ app.innerHTML = `
       <label>Status
         <select id="status">
           <option value="">all</option>
-          <option value="active">active</option>
+          <option value="running">running</option>
+          <option value="success">success</option>
+          <option value="failed">failed</option>
           <option value="completed">completed</option>
           <option value="closed">closed</option>
           <option value="waiting_human">waiting_human</option>
@@ -78,13 +99,47 @@ app.innerHTML = `
       <button id="refreshBtn" type="button">Refresh</button>
     </section>
 
-    <section class="cards" id="cards"></section>
-    <section class="status-breakdown" id="statusBreakdown"></section>
+    <section class="section">
+      <div class="section-title-row">
+        <h2>Session Overview</h2>
+      </div>
+      <section class="cards" id="sessionCards"></section>
+      <section class="status-breakdown" id="sessionStatusBreakdown"></section>
+    </section>
+
+    <section class="section">
+      <div class="section-title-row">
+        <h2>Task Completion</h2>
+      </div>
+      <section class="cards task-cards" id="taskCards"></section>
+      <section class="status-breakdown" id="taskStatusBreakdown"></section>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Recent Tasks</h2>
+        <div id="errorText" class="error-text"></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Status</th>
+              <th>Type</th>
+              <th>Assigned Agent</th>
+              <th>Session</th>
+              <th>Last Active</th>
+            </tr>
+          </thead>
+          <tbody id="tasksTableBody"></tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="panel">
       <div class="panel-header">
         <h2>Recent Sessions</h2>
-        <div id="errorText" class="error-text"></div>
       </div>
       <div class="table-wrap">
         <table>
@@ -107,7 +162,7 @@ app.innerHTML = `
       <div class="panel-header">
         <h2>Session Snapshot</h2>
       </div>
-      <div id="snapshotContent" class="snapshot-empty">Select a session to inspect its tasks.</div>
+      <div id="snapshotContent" class="snapshot-empty">Select a session to inspect task details.</div>
     </section>
   </main>
 `;
@@ -125,14 +180,19 @@ const userInput = mustGet<HTMLInputElement>("#userId");
 const statusInput = mustGet<HTMLSelectElement>("#status");
 const limitInput = mustGet<HTMLInputElement>("#limit");
 const refreshBtn = mustGet<HTMLButtonElement>("#refreshBtn");
-const cardsContainer = mustGet<HTMLElement>("#cards");
-const statusBreakdown = mustGet<HTMLElement>("#statusBreakdown");
-const tableBody = mustGet<HTMLTableSectionElement>("#sessionsTableBody");
+const sessionCards = mustGet<HTMLElement>("#sessionCards");
+const taskCards = mustGet<HTMLElement>("#taskCards");
+const sessionStatusBreakdown = mustGet<HTMLElement>("#sessionStatusBreakdown");
+const taskStatusBreakdown = mustGet<HTMLElement>("#taskStatusBreakdown");
+const tasksTableBody = mustGet<HTMLTableSectionElement>("#tasksTableBody");
+const sessionsTableBody = mustGet<HTMLTableSectionElement>("#sessionsTableBody");
 const snapshotContent = mustGet<HTMLElement>("#snapshotContent");
 const errorText = mustGet<HTMLElement>("#errorText");
 
 tenantInput.value = defaultTenant;
 userInput.value = defaultUser;
+
+let autoRefreshHandle: number | null = null;
 
 async function apiGet<T>(path: string): Promise<T> {
   const headers: Record<string, string> = {};
@@ -167,38 +227,44 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function renderCards(stats: SessionStatsResponse): void {
-  const active = stats.by_status.active || 0;
-  const completed = stats.by_status.completed || 0;
-  const closed = stats.by_status.closed || 0;
-  const waitingHuman = stats.by_status.waiting_human || 0;
-  cardsContainer.innerHTML = `
-    <article class="metric"><span>Total Sessions</span><strong>${stats.total}</strong></article>
-    <article class="metric"><span>Active</span><strong>${active}</strong></article>
-    <article class="metric"><span>Completed</span><strong>${completed}</strong></article>
-    <article class="metric"><span>Closed</span><strong>${closed}</strong></article>
-    <article class="metric"><span>Waiting Human</span><strong>${waitingHuman}</strong></article>
-  `;
-}
-
-function renderStatusBreakdown(stats: SessionStatsResponse): void {
-  const entries = Object.entries(stats.by_status);
+function renderStatusPills(container: HTMLElement, stats: Record<string, number>): void {
+  const entries = Object.entries(stats);
   if (entries.length === 0) {
-    statusBreakdown.innerHTML = `<div class="status-pill">No status data</div>`;
+    container.innerHTML = `<div class="status-pill">No status data</div>`;
     return;
   }
-  statusBreakdown.innerHTML = entries
+  container.innerHTML = entries
     .sort((a, b) => b[1] - a[1])
     .map(([status, count]) => `<div class="status-pill"><span>${escapeHtml(status)}</span><strong>${count}</strong></div>`)
     .join("");
 }
 
+function renderSessionCards(stats: SessionStatsResponse): void {
+  sessionCards.innerHTML = `
+    <article class="metric"><span>Total Sessions</span><strong>${stats.total}</strong></article>
+    <article class="metric"><span>Active</span><strong>${stats.by_status.active || 0}</strong></article>
+    <article class="metric"><span>Completed</span><strong>${stats.by_status.completed || 0}</strong></article>
+    <article class="metric"><span>Closed</span><strong>${stats.by_status.closed || 0}</strong></article>
+    <article class="metric"><span>Waiting Human</span><strong>${stats.by_status.waiting_human || 0}</strong></article>
+  `;
+}
+
+function renderTaskCards(stats: TaskStatsResponse): void {
+  taskCards.innerHTML = `
+    <article class="metric emphasis"><span>Total Tasks</span><strong>${stats.total}</strong></article>
+    <article class="metric emphasis"><span>Running Now</span><strong>${stats.running}</strong></article>
+    <article class="metric emphasis"><span>Completed</span><strong>${stats.completed}</strong></article>
+    <article class="metric emphasis"><span>Failed</span><strong>${stats.failed}</strong></article>
+    <article class="metric emphasis"><span>Completion Rate</span><strong>${stats.completion_rate}%</strong></article>
+  `;
+}
+
 function renderSessions(listing: SessionListResponse): void {
   if (listing.items.length === 0) {
-    tableBody.innerHTML = `<tr><td colspan="6" class="empty-row">No sessions found.</td></tr>`;
+    sessionsTableBody.innerHTML = `<tr><td colspan="6" class="empty-row">No sessions found.</td></tr>`;
     return;
   }
-  tableBody.innerHTML = listing.items
+  sessionsTableBody.innerHTML = listing.items
     .map(
       (item) => `
         <tr>
@@ -208,6 +274,27 @@ function renderSessions(listing: SessionListResponse): void {
           <td title="${escapeHtml(item.topic || "-")}">${escapeHtml(item.topic || "-")}</td>
           <td>${fmtTime(item.last_active_at)}</td>
           <td><button class="ghost" data-session-id="${item.session_id}" type="button">View</button></td>
+        </tr>
+      `,
+    )
+    .join("");
+}
+
+function renderTasks(listing: TaskListResponse): void {
+  if (listing.items.length === 0) {
+    tasksTableBody.innerHTML = `<tr><td colspan="6" class="empty-row">No tasks found.</td></tr>`;
+    return;
+  }
+  tasksTableBody.innerHTML = listing.items
+    .map(
+      (item) => `
+        <tr>
+          <td><code>${item.task_id}</code></td>
+          <td><span class="status-tag">${escapeHtml(item.status)}</span></td>
+          <td>${escapeHtml(item.task_type || "-")}</td>
+          <td>${escapeHtml(item.assigned_agent || "-")}</td>
+          <td><code>${escapeHtml(item.session_id)}</code></td>
+          <td>${fmtTime(item.last_active_at)}</td>
         </tr>
       `,
     )
@@ -257,55 +344,76 @@ function renderSnapshot(snapshot: SessionSnapshotResponse): void {
   `;
 }
 
+function buildQuery(limit: number): URLSearchParams {
+  const tenant = tenantInput.value.trim();
+  const user = userInput.value.trim();
+  const status = statusInput.value.trim();
+  const query = new URLSearchParams();
+  query.set("limit", String(limit));
+  query.set("offset", "0");
+  if (tenant) {
+    query.set("tenant_id", tenant);
+  }
+  if (user) {
+    query.set("user_id", user);
+  }
+  if (status) {
+    query.set("status", status);
+  }
+  return query;
+}
+
+function buildStatsQuery(): URLSearchParams {
+  const tenant = tenantInput.value.trim();
+  const user = userInput.value.trim();
+  const query = new URLSearchParams();
+  if (tenant) {
+    query.set("tenant_id", tenant);
+  }
+  if (user) {
+    query.set("user_id", user);
+  }
+  return query;
+}
+
 async function loadDashboard(): Promise<void> {
   errorText.textContent = "";
   refreshBtn.disabled = true;
   refreshBtn.textContent = "Loading...";
   try {
-    const tenant = tenantInput.value.trim();
-    const user = userInput.value.trim();
-    const status = statusInput.value.trim();
     const limit = Number(limitInput.value) || 50;
-    const query = new URLSearchParams();
-    query.set("limit", String(limit));
-    query.set("offset", "0");
-    if (tenant) {
-      query.set("tenant_id", tenant);
-    }
-    if (user) {
-      query.set("user_id", user);
-    }
-    if (status) {
-      query.set("status", status);
-    }
-    const statsQuery = new URLSearchParams();
-    if (tenant) {
-      statsQuery.set("tenant_id", tenant);
-    }
-    if (user) {
-      statsQuery.set("user_id", user);
-    }
+    const query = buildQuery(limit);
+    const statsQuery = buildStatsQuery();
 
-    const [stats, sessions] = await Promise.all([
+    const [sessionStats, taskStats, sessions, tasks] = await Promise.all([
       apiGet<SessionStatsResponse>(`/audit/sessions/stats?${statsQuery.toString()}`),
+      apiGet<TaskStatsResponse>(`/audit/tasks/stats?${statsQuery.toString()}`),
       apiGet<SessionListResponse>(`/audit/sessions?${query.toString()}`),
+      apiGet<TaskListResponse>(`/audit/tasks?${query.toString()}`),
     ]);
-    renderCards(stats);
-    renderStatusBreakdown(stats);
+
+    renderSessionCards(sessionStats);
+    renderTaskCards(taskStats);
+    renderStatusPills(sessionStatusBreakdown, sessionStats.by_status);
+    renderStatusPills(taskStatusBreakdown, taskStats.by_status);
     renderSessions(sessions);
+    renderTasks(tasks);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     errorText.textContent = message;
-    cardsContainer.innerHTML = "";
-    statusBreakdown.innerHTML = "";
-    tableBody.innerHTML = `<tr><td colspan="6" class="empty-row">Failed to load data.</td></tr>`;
+    sessionCards.innerHTML = "";
+    taskCards.innerHTML = "";
+    sessionStatusBreakdown.innerHTML = "";
+    taskStatusBreakdown.innerHTML = "";
+    tasksTableBody.innerHTML = `<tr><td colspan="6" class="empty-row">Failed to load tasks.</td></tr>`;
+    sessionsTableBody.innerHTML = `<tr><td colspan="6" class="empty-row">Failed to load sessions.</td></tr>`;
   } finally {
     refreshBtn.disabled = false;
     refreshBtn.textContent = "Refresh";
   }
 }
 
-tableBody.addEventListener("click", async (event) => {
+sessionsTableBody.addEventListener("click", async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
     return;
@@ -336,5 +444,12 @@ tableBody.addEventListener("click", async (event) => {
 refreshBtn.addEventListener("click", () => {
   void loadDashboard();
 });
+
+if (autoRefreshHandle !== null) {
+  window.clearInterval(autoRefreshHandle);
+}
+autoRefreshHandle = window.setInterval(() => {
+  void loadDashboard();
+}, 15000);
 
 void loadDashboard();

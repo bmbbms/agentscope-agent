@@ -122,6 +122,27 @@ class AuditRepository:
         del tenant_id, user_id
         return {}
 
+    async def list_tasks(
+        self,
+        *,
+        status: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        del status, tenant_id, user_id, limit, offset
+        return []
+
+    async def get_task_stats(
+        self,
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, int]:
+        del tenant_id, user_id
+        return {}
+
     async def fetch_next_eval_queue_item(self, worker_id: str) -> dict[str, Any] | None:
         del worker_id
         return None
@@ -255,6 +276,44 @@ class CollectingAuditRepository(AuditRepository):
     ) -> dict[str, int]:
         sessions = self.invocations.get("__sessions__", {}).values()
         rows = [dict(item) for item in sessions]
+        if tenant_id:
+            rows = [row for row in rows if row.get("tenant_id") == tenant_id]
+        if user_id:
+            rows = [row for row in rows if row.get("user_id") == user_id]
+        stats: dict[str, int] = {}
+        for row in rows:
+            status = row.get("status", "unknown")
+            stats[status] = stats.get(status, 0) + 1
+        return stats
+
+    async def list_tasks(
+        self,
+        *,
+        status: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        tasks = self.invocations.get("__tasks__", {}).values()
+        rows = [dict(item) for item in tasks]
+        if status:
+            rows = [row for row in rows if row.get("status") == status]
+        if tenant_id:
+            rows = [row for row in rows if row.get("tenant_id") == tenant_id]
+        if user_id:
+            rows = [row for row in rows if row.get("user_id") == user_id]
+        rows.sort(key=lambda item: item.get("last_active_at"), reverse=True)
+        return rows[offset : offset + limit]
+
+    async def get_task_stats(
+        self,
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, int]:
+        tasks = self.invocations.get("__tasks__", {}).values()
+        rows = [dict(item) for item in tasks]
         if tenant_id:
             rows = [row for row in rows if row.get("tenant_id") == tenant_id]
         if user_id:

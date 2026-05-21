@@ -704,6 +704,44 @@ class PostgresAuditRepository(AuditRepository):
         rows = await self.pool.fetch(sql, tenant_id, user_id)
         return {row["status"]: int(row["cnt"]) for row in rows}
 
+    async def list_tasks(
+        self,
+        *,
+        status: str | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        sql = """
+        select *
+        from conversation_task
+        where ($1::varchar is null or status = $1)
+          and ($2::varchar is null or tenant_id = $2)
+          and ($3::varchar is null or user_id = $3)
+        order by last_active_at desc, id desc
+        limit $4
+        offset $5
+        """
+        rows = await self.pool.fetch(sql, status, tenant_id, user_id, limit, offset)
+        return [_decode_json_fields(dict(row), ["meta"]) for row in rows]
+
+    async def get_task_stats(
+        self,
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, int]:
+        sql = """
+        select status, count(*) as cnt
+        from conversation_task
+        where ($1::varchar is null or tenant_id = $1)
+          and ($2::varchar is null or user_id = $2)
+        group by status
+        """
+        rows = await self.pool.fetch(sql, tenant_id, user_id)
+        return {row["status"]: int(row["cnt"]) for row in rows}
+
     async def fetch_next_eval_queue_item(self, worker_id: str) -> dict[str, Any] | None:
         sql = """
         with picked as (
