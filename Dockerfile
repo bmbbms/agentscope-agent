@@ -12,5 +12,7 @@ RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
     asyncpg \
-    httpx
-
+    httpx \
+    requests \
+    openpyxl \
+    jinja2

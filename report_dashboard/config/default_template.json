@@ -1,0 +1,291 @@
+{
+  "version": "1.0",
+  "created_at": "2026-04-02",
+  "updated_at": "2026-04-02",
+  "updated_by": "system",
+  "description": "收单运营月报看板默认模板",
+
+  "dashboard_types": {
+    "large_pos": {
+      "title": "商户收款看板（大POS）",
+      "kpi": {
+        "items": [
+          {"id": "total_amount", "name": "交易总金额", "field": "total_amount", "unit": "万元", "protected": true, "order": 1, "visible": true},
+          {"id": "new_merchants", "name": "新增商户数", "field": "new_merchants", "unit": "户", "protected": true, "order": 2, "visible": true},
+          {"id": "active_merchants", "name": "活跃商户数", "field": "active_merchants", "unit": "户", "protected": true, "order": 3, "visible": true}
+        ],
+        "display_format": {
+          "decimal_places": 0,
+          "use_thousands_separator": true
+        }
+      },
+      "charts": [
+        {
+          "id": "two_year_trend",
+          "title": "近两年运营趋势",
+          "type": "mixed_bar_line",
+          "visible": true,
+          "order": 1,
+          "height": 380,
+          "series": [
+            {"name": "交易总金额", "field": "total_amount", "type": "bar", "y_axis": 0, "color": "#5a7be8"},
+            {"name": "新增商户数", "field": "new_merchants", "type": "line", "y_axis": 1, "color": "#67c23a"},
+            {"name": "活跃商户数", "field": "active_merchants", "type": "line", "y_axis": 1, "color": "#e6a23c"}
+          ],
+          "y_axis_config": {
+            "left": {"name": "亿元", "position": "left"},
+            "right": {"name": "户数", "position": "right", "color": "#e6a23c"}
+          },
+          "data_range": "25_months"
+        },
+        {
+          "id": "business_amount_trend",
+          "title": "各业务类型近一年交易金额趋势",
+          "type": "stacked_bar",
+          "visible": true,
+          "order": 2,
+          "height": 320,
+          "series": [
+            {"name": "传统POS", "field": "traditional_pos_amount", "color": "#5a7be8"},
+            {"name": "外接码付(咕哚云)", "field": "codepay_guduoyun_amount", "color": "#67c23a"},
+            {"name": "理财POS", "field": "finance_pos_amount", "color": "#e6a23c"}
+          ],
+          "data_range": "13_months"
+        },
+        {
+          "id": "business_count_trend",
+          "title": "各业务类型近一年交易笔数趋势",
+          "type": "stacked_bar",
+          "visible": true,
+          "order": 3,
+          "height": 320,
+          "series": [
+            {"name": "传统POS", "field": "traditional_pos_count", "color": "#5a7be8"},
+            {"name": "外接码付(咕哚云)", "field": "codepay_guduoyun_count", "color": "#67c23a"},
+            {"name": "理财POS", "field": "finance_pos_count", "color": "#e6a23c"}
+          ],
+          "data_range": "13_months"
+        }
+      ],
+      "tables": [
+        {
+          "id": "branch_decline_trade",
+          "title": "分公司交易金额环比下降TOP10",
+          "visible": true,
+          "order": 1,
+          "columns": ["排名", "归属分公司", "上月交易额(万)", "本月交易额(万)", "环比"],
+          "data_source": "branch_decline_trade",
+          "max_rows": 10
+        },
+        {
+          "id": "branch_increase_trade",
+          "title": "分公司交易金额环比上涨TOP10",
+          "visible": true,
+          "order": 2,
+          "columns": ["排名", "归属分公司", "上月交易额(万)", "本月交易额(万)", "环比"],
+          "data_source": "branch_increase_trade",
+          "max_rows": 10
+        },
+        {
+          "id": "branch_decline_merchant",
+          "title": "分公司新增商户环比下降TOP10",
+          "visible": true,
+          "order": 3,
+          "columns": ["排名", "归属分公司", "上月新增商户", "本月新增商户", "环比"],
+          "data_source": "branch_decline_merchant",
+          "max_rows": 10
+        },
+        {
+          "id": "branch_increase_merchant",
+          "title": "分公司新增商户环比上涨TOP10",
+          "visible": true,
+          "order": 4,
+          "columns": ["排名", "归属分公司", "上月新增商户", "本月新增商户", "环比"],
+          "data_source": "branch_increase_merchant",
+          "max_rows": 10
+        },
+        {
+          "id": "merchant_decline",
+          "title": "商户交易金额环比下降TOP10",
+          "visible": true,
+          "order": 5,
+          "columns": ["排名", "商户名", "业务类型", "上月交易额(万)", "本月交易额(万)", "环比"],
+          "data_source": "merchant_decline",
+          "max_rows": 10
+        },
+        {
+          "id": "merchant_increase",
+          "title": "商户交易金额环比上涨TOP10",
+          "visible": true,
+          "order": 6,
+          "columns": ["排名", "商户名", "业务类型", "上月交易额(万)", "本月交易额(万)", "环比"],
+          "data_source": "merchant_increase",
+          "max_rows": 10
+        }
+      ]
+    },
+    "small_pos": {
+      "title": "立刷产品看板（小POS）",
+      "kpi": {
+        "items": [
+          {"id": "total_amount", "name": "交易总金额", "field": "total_amount", "unit": "万元", "protected": true, "order": 1, "visible": true},
+          {"id": "new_merchants", "name": "新增商户数", "field": "new_merchants", "unit": "户", "protected": true, "order": 2, "visible": true},
+          {"id": "active_merchants", "name": "活跃商户数", "field": "active_merchants", "unit": "户", "protected": true, "order": 3, "visible": true}
+        ],
+        "display_format": {
+          "decimal_places": 0,
+          "use_thousands_separator": true
+        }
+      },
+      "charts": [
+        {
+          "id": "two_year_trend",
+          "title": "近两年运营趋势",
+          "type": "mixed_bar_line",
+          "visible": true,
+          "order": 1,
+          "height": 380,
+          "series": [
+            {"name": "交易总金额", "field": "total_amount", "type": "bar", "y_axis": 0, "color": "#5a7be8"},
+            {"name": "新增商户数", "field": "new_merchants", "type": "line", "y_axis": 1, "color": "#67c23a"},
+            {"name": "活跃商户数", "field": "active_merchants", "type": "line", "y_axis": 1, "color": "#e6a23c"}
+          ],
+          "y_axis_config": {
+            "left": {"name": "亿元", "position": "left"},
+            "right": {"name": "户数", "position": "right", "color": "#67c23a"}
+          },
+          "data_range": "25_months"
+        },
+        {
+          "id": "product_amount_trend",
+          "title": "各产品近一年交易金额趋势",
+          "type": "multi_line",
+          "visible": true,
+          "order": 2,
+          "height": 320,
+          "series": [
+            {"name": "上网宝", "field": "shangwangbao_amount", "color": "#5a7be8"},
+            {"name": "老电签", "field": "laodianqian_amount", "color": "#67c23a"},
+            {"name": "微电签", "field": "weidianqian_amount", "color": "#e6a23c"},
+            {"name": "微智能", "field": "weizhineng_amount", "color": "#f56c6c"},
+            {"name": "畅享版", "field": "changxiangban_amount", "color": "#909399"},
+            {"name": "骐骥版", "field": "qijiban_amount", "color": "#b37feb"},
+            {"name": "小蓝牙", "field": "xiaolanya_amount", "color": "#ffc107"}
+          ],
+          "data_range": "13_months"
+        },
+        {
+          "id": "terminal_trend",
+          "title": "各产品近一年新增终端趋势",
+          "type": "multi_line",
+          "visible": true,
+          "order": 3,
+          "height": 320,
+          "series": [
+            {"name": "上网宝", "field": "shangwangbao_terminal", "color": "#5a7be8"},
+            {"name": "老电签", "field": "laodianqian_terminal", "color": "#67c23a"},
+            {"name": "微电签", "field": "weidianqian_terminal", "color": "#e6a23c"},
+            {"name": "微智能", "field": "weizhineng_terminal", "color": "#f56c6c"},
+            {"name": "畅享版", "field": "changxiangban_terminal", "color": "#909399"},
+            {"name": "骐骥版", "field": "qijiban_terminal", "color": "#b37feb"},
+            {"name": "小蓝牙", "field": "xiaolanya_terminal", "color": "#ffc107"}
+          ],
+          "data_range": "13_months"
+        },
+        {
+          "id": "term_trend",
+          "title": "近两年终端绑定、激活、活跃趋势",
+          "type": "mixed_bar_line",
+          "visible": true,
+          "order": 4,
+          "height": 380,
+          "series": [
+            {"name": "新增终端绑定", "field": "bind_terminals", "type": "bar", "y_axis": 0, "color": "#5a7be8"},
+            {"name": "一阶段激活数", "field": "active_terminals", "type": "bar", "y_axis": 0, "color": "#67c23a"},
+            {"name": "活跃商户数", "field": "term_active_merchants", "type": "line", "y_axis": 1, "color": "#e6a23c"}
+          ],
+          "y_axis_config": {
+            "left": {"name": "台", "position": "left"},
+            "right": {"name": "户", "position": "right", "color": "#e6a23c"}
+          },
+          "data_range": "25_months"
+        }
+      ],
+      "tables": [
+        {
+          "id": "agent_decline_trade",
+          "title": "服务商交易金额环比下降TOP10",
+          "visible": true,
+          "order": 1,
+          "columns": ["排名", "服务商名称", "上月交易额(亿)", "本月交易额(亿)", "环比"],
+          "data_source": "agent_decline_trade",
+          "max_rows": 10
+        },
+        {
+          "id": "agent_increase_trade",
+          "title": "服务商交易金额环比上涨TOP10",
+          "visible": true,
+          "order": 2,
+          "columns": ["排名", "服务商名称", "上月交易额(亿)", "本月交易额(亿)", "环比"],
+          "data_source": "agent_increase_trade",
+          "max_rows": 10
+        },
+        {
+          "id": "agent_decline_merchant",
+          "title": "服务商新增商户环比下降TOP10",
+          "visible": true,
+          "order": 3,
+          "columns": ["排名", "服务商名称", "上月新增商户", "本月新增商户", "环比"],
+          "data_source": "agent_decline_merchant",
+          "max_rows": 10
+        },
+        {
+          "id": "agent_increase_merchant",
+          "title": "服务商新增商户环比上涨TOP10",
+          "visible": true,
+          "order": 4,
+          "columns": ["排名", "服务商名称", "上月新增商户", "本月新增商户", "环比"],
+          "data_source": "agent_increase_merchant",
+          "max_rows": 10
+        }
+      ]
+    }
+  },
+
+  "global_settings": {
+    "theme": "default",
+    "color_scheme": "blue",
+    "chart_height": 320,
+    "chart_height_large": 380,
+    "table_row_height": 36
+  },
+
+  "protected_config": {
+    "protected_indicators": ["交易总金额", "新增商户数", "活跃商户数"],
+    "min_kpi_count": 3,
+    "required_charts": ["two_year_trend"]
+  },
+
+  "available_indicators": {
+    "large_pos": [
+      {"id": "total_amount", "name": "交易总金额", "field": "total_amount", "unit": "万元", "can_add": false},
+      {"id": "new_merchants", "name": "新增商户数", "field": "new_merchants", "unit": "户", "can_add": false},
+      {"id": "active_merchants", "name": "活跃商户数", "field": "active_merchants", "unit": "户", "can_add": false},
+      {"id": "new_terminals", "name": "新增终端数", "field": "new_terminals", "unit": "台", "can_add": true},
+      {"id": "avg_amount", "name": "笔均金额", "field": "avg_amount", "unit": "元", "can_add": true}
+    ],
+    "small_pos": [
+      {"id": "total_amount", "name": "交易总金额", "field": "total_amount", "unit": "万元", "can_add": false},
+      {"id": "new_merchants", "name": "新增商户数", "field": "new_merchants", "unit": "户", "can_add": false},
+      {"id": "active_merchants", "name": "活跃商户数", "field": "active_merchants", "unit": "户", "can_add": false},
+      {"id": "bind_terminals", "name": "新增终端绑定", "field": "bind_terminals", "unit": "台", "can_add": true},
+      {"id": "active_terminals", "name": "一阶段激活数", "field": "active_terminals", "unit": "台", "can_add": true}
+    ]
+  },
+
+  "data_field_mapping": {
+    "交易总金额": {"source_field": "交易总金额（万元）", "value_unit": "万元", "display_unit": "万元"},
+    "新增商户数": {"source_field": "新增商户数", "value_unit": "户", "display_unit": "户"},
+    "活跃商户数": {"source_field": "活跃商户数", "value_unit": "户", "display_unit": "户"}
+  }
+}

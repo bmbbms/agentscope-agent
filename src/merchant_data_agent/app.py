@@ -16,7 +16,22 @@ from .tools import MerchantDataTools
 def _route_by_rule(query: str) -> str:
     lowered = query.lower()
     metric_markers = ["metric", "definition", "formula", "dimension", "calculation"]
-    report_markers = ["report", "summary", "weekly", "daily", "review"]
+    report_markers = [
+        "report",
+        "summary",
+        "weekly",
+        "daily",
+        "review",
+        "dashboard",
+        "month",
+        "monthly",
+        "reporting",
+        "报告",
+        "月报",
+        "看板",
+        "报表",
+        "生成报告",
+    ]
     if any(marker in lowered for marker in metric_markers):
         return "metric_definition"
     if any(marker in lowered for marker in report_markers):

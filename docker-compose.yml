@@ -51,6 +51,25 @@ services:
     ports:
       - "8091:8091"
 
+  report-child-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mvp-report-child-agent
+    depends_on:
+      audit-ingest:
+        condition: service_started
+    environment:
+      PYTHONPATH: /app/src
+      SUPERSET_BASE_URL: ${SUPERSET_BASE_URL:-}
+      SUPERSET_USERNAME: ${SUPERSET_USERNAME:-}
+      SUPERSET_PASSWORD: ${SUPERSET_PASSWORD:-}
+      SUPERSET_PASSWORD_ENCRYPTED: ${SUPERSET_PASSWORD_ENCRYPTED:-}
+      SUPERSET_DATABASE: ${SUPERSET_DATABASE:-}
+    command: uvicorn report_child_agent_http_api:app --host 0.0.0.0 --port 8092
+    ports:
+      - "8092:8092"
+
   main-agent:
     build:
       context: .
@@ -61,6 +80,8 @@ services:
         condition: service_started
       child-agent:
         condition: service_started
+      report-child-agent:
+        condition: service_started
     environment:
       AGENT_AUDIT_PG_DSN: postgresql://agent_user:agent_pass@postgres:5432/agent_audit
       MAIN_AGENT_API_TOKEN: main-token
@@ -69,7 +90,7 @@ services:
       MERCHANT_REMOTE_AGENTS_JSON: >
         [{"name":"diagnosis","protocol":"http","url":"http://child-agent:8091/invoke"},
          {"name":"metric_definition","protocol":"http","url":"http://child-agent:8091/invoke"},
-         {"name":"report","protocol":"http","url":"http://child-agent:8091/invoke"}]
+         {"name":"report","protocol":"http","url":"http://report-child-agent:8092/invoke"}]
       PYTHONPATH: /app/src
       AUDIT_SCHEMA_SQL_PATH: /app/sql/audit_schema.sql
     command: >

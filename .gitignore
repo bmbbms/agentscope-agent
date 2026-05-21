@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .DS_Store
+frontend-dashboard/.env
+report_dashboard/output/
