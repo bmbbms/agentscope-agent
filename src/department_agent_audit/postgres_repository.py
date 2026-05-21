@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .storage import AuditRepository, dumps_json
@@ -23,6 +24,28 @@ def _jsonb(value: Any) -> str:
 
 def _jsonb_list(value: Any) -> str:
     return dumps_json(value if value is not None else [])
+
+
+def _json_load_if_needed(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    stripped = value.strip()
+    if not stripped:
+        return value
+    if not ((stripped.startswith("{") and stripped.endswith("}")) or (stripped.startswith("[") and stripped.endswith("]"))):
+        return value
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        return value
+
+
+def _decode_json_fields(row: dict[str, Any], fields: list[str]) -> dict[str, Any]:
+    decoded = dict(row)
+    for field in fields:
+        if field in decoded:
+            decoded[field] = _json_load_if_needed(decoded[field])
+    return decoded
 
 
 class PostgresAuditRepository(AuditRepository):
@@ -429,7 +452,9 @@ class PostgresAuditRepository(AuditRepository):
         where event_id = $1
         """
         row = await self.pool.fetchrow(sql, event_id)
-        return dict(row) if row else None
+        if not row:
+            return None
+        return _decode_json_fields(dict(row), ["payload"])
 
     async def list_dead_letter_events(self, status: str = "open", limit: int = 100) -> list[dict[str, Any]]:
         sql = """
@@ -443,11 +468,11 @@ class PostgresAuditRepository(AuditRepository):
         limit $2
         """
         rows = await self.pool.fetch(sql, status, limit)
-        return [dict(row) for row in rows]
+        return [_decode_json_fields(dict(row), ["payload"]) for row in rows]
 
     async def fetch_trace_view(self, trace_id: str) -> dict[str, Any]:
         async with self.pool.acquire() as conn:
-            invocations = [dict(row) for row in await conn.fetch(
+            invocations = [_decode_json_fields(dict(row), ["input_payload", "output_payload", "tags", "meta"]) for row in await conn.fetch(
                 """
                 select * from agent_invocation_log
                 where trace_id = $1
@@ -455,7 +480,7 @@ class PostgresAuditRepository(AuditRepository):
                 """,
                 trace_id,
             )]
-            steps = [dict(row) for row in await conn.fetch(
+            steps = [_decode_json_fields(dict(row), ["input_payload", "output_payload", "token_usage", "meta"]) for row in await conn.fetch(
                 """
                 select * from agent_step_log
                 where trace_id = $1
@@ -463,7 +488,7 @@ class PostgresAuditRepository(AuditRepository):
                 """,
                 trace_id,
             )]
-            eval_results = [dict(row) for row in await conn.fetch(
+            eval_results = [_decode_json_fields(dict(row), ["issue_tags", "findings", "suggestions", "evidence", "raw_judge"]) for row in await conn.fetch(
                 """
                 select * from agent_eval_result
                 where trace_id = $1
@@ -471,7 +496,7 @@ class PostgresAuditRepository(AuditRepository):
                 """,
                 trace_id,
             )]
-            ingest_events = [dict(row) for row in await conn.fetch(
+            ingest_events = [_decode_json_fields(dict(row), ["payload"]) for row in await conn.fetch(
                 """
                 select * from audit_ingest_event
                 where trace_id = $1
@@ -479,7 +504,7 @@ class PostgresAuditRepository(AuditRepository):
                 """,
                 trace_id,
             )]
-            dead_letters = [dict(row) for row in await conn.fetch(
+            dead_letters = [_decode_json_fields(dict(row), ["payload"]) for row in await conn.fetch(
                 """
                 select * from audit_ingest_dead_letter
                 where trace_id = $1
@@ -547,7 +572,9 @@ class PostgresAuditRepository(AuditRepository):
             """,
             session_id,
         )
-        return dict(row) if row else None
+        if not row:
+            return None
+        return _decode_json_fields(dict(row), ["meta"])
 
     async def upsert_task(self, payload: dict[str, Any]) -> None:
         sql = """
@@ -608,7 +635,9 @@ class PostgresAuditRepository(AuditRepository):
             """,
             task_id,
         )
-        return dict(row) if row else None
+        if not row:
+            return None
+        return _decode_json_fields(dict(row), ["meta"])
 
     async def count_session_tasks(
         self,
@@ -635,7 +664,7 @@ class PostgresAuditRepository(AuditRepository):
         limit $2
         """
         rows = await self.pool.fetch(sql, session_id, limit)
-        return [dict(row) for row in rows]
+        return [_decode_json_fields(dict(row), ["meta"]) for row in rows]
 
     async def list_sessions(
         self,
@@ -657,7 +686,7 @@ class PostgresAuditRepository(AuditRepository):
         offset $5
         """
         rows = await self.pool.fetch(sql, status, tenant_id, user_id, limit, offset)
-        return [dict(row) for row in rows]
+        return [_decode_json_fields(dict(row), ["meta"]) for row in rows]
 
     async def get_session_stats(
         self,
@@ -713,8 +742,9 @@ class PostgresAuditRepository(AuditRepository):
                 row = await conn.fetchrow(sql, worker_id)
         if row is None:
             return None
-        result = dict(row)
-        result["payload"] = dict(result["payload"])
+        result = _decode_json_fields(dict(row), ["payload"])
+        if isinstance(result.get("payload"), dict):
+            result["payload"] = dict(result["payload"])
         return result
 
     async def mark_eval_queue_item(self, queue_item_id: str, status: str, error_message: str | None = None) -> None:

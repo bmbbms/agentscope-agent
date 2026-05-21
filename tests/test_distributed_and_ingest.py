@@ -4,6 +4,7 @@ import unittest
 
 from department_agent_audit.distributed import ChildAgentAuditRunner
 from department_agent_audit.event_ingest import AuditIngestService, build_audit_event
+from department_agent_audit.postgres_repository import _decode_json_fields
 from department_agent_audit.storage import CollectingAuditRepository
 
 
@@ -87,6 +88,16 @@ class DistributedAndIngestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["reply"], "ok")
         self.assertIn("audit_bundle", result)
         self.assertEqual(result["audit_bundle"]["invocations"][0]["output_payload"]["reply"], "ok")
+
+    def test_decode_json_fields_handles_stringified_json(self) -> None:
+        row = {
+            "meta": '{"source_type": "http_api", "source_name": null}',
+            "tags": '["diagnosis"]',
+            "topic": "demo",
+        }
+        decoded = _decode_json_fields(row, ["meta", "tags"])
+        self.assertEqual(decoded["meta"]["source_type"], "http_api")
+        self.assertEqual(decoded["tags"], ["diagnosis"])
 
 
 if __name__ == "__main__":
