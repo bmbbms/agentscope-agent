@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .storage import AuditRepository
+from .storage import dumps_json
 
 try:
     import httpx
@@ -37,6 +38,30 @@ def _headers(endpoint: AuditIngestEndpoint) -> dict[str, str]:
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_datetime(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return value
+
+
+def _normalize_event_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            child = _normalize_event_payload(item)
+            if key.endswith("_at"):
+                child = _parse_datetime(child)
+            normalized[key] = child
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_event_payload(item) for item in value]
+    return value
 
 
 class HttpAuditIngestRepository(AuditRepository):
@@ -76,7 +101,11 @@ class HttpAuditIngestRepository(AuditRepository):
             producer_service=self.producer_service,
         )
         async with httpx.AsyncClient(timeout=self.endpoint.timeout_seconds) as client:
-            response = await client.post(self.endpoint.url, json=body, headers=_headers(self.endpoint))
+            response = await client.post(
+                self.endpoint.url,
+                content=dumps_json(body),
+                headers=_headers(self.endpoint),
+            )
             response.raise_for_status()
 
 
@@ -116,6 +145,7 @@ class AuditIngestService:
         self.repository = repository
 
     async def ingest_event(self, event: dict[str, Any]) -> None:
+        event = _normalize_event_payload(event)
         should_process = await self.repository.register_ingest_event(event)
         if not should_process:
             return

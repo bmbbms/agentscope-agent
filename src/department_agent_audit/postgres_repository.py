@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .storage import AuditRepository
+from .storage import AuditRepository, dumps_json
 
 try:
     import asyncpg
@@ -15,6 +15,14 @@ def _ensure_asyncpg() -> None:
         raise RuntimeError(
             "asyncpg is required for PostgresAuditRepository. Install it with `pip install asyncpg`."
         )
+
+
+def _jsonb(value: Any) -> str:
+    return dumps_json(value if value is not None else {})
+
+
+def _jsonb_list(value: Any) -> str:
+    return dumps_json(value if value is not None else [])
 
 
 class PostgresAuditRepository(AuditRepository):
@@ -61,11 +69,11 @@ class PostgresAuditRepository(AuditRepository):
             payload.get("user_id"),
             payload.get("tenant_id"),
             payload.get("input_summary"),
-            payload.get("input_payload", {}),
+            _jsonb(payload.get("input_payload", {})),
             payload["status"],
             payload["started_at"],
-            payload.get("tags", []),
-            payload.get("meta", {}),
+            _jsonb_list(payload.get("tags", [])),
+            _jsonb(payload.get("meta", {})),
         )
 
     async def update_invocation_finish(self, run_id: str, payload: dict[str, Any]) -> None:
@@ -98,7 +106,7 @@ class PostgresAuditRepository(AuditRepository):
             payload["execution_success"],
             payload.get("business_success"),
             payload.get("output_summary"),
-            payload.get("output_payload", {}),
+            _jsonb(payload.get("output_payload", {})),
             payload.get("error_code"),
             payload.get("error_message"),
             payload.get("finished_at"),
@@ -180,8 +188,8 @@ class PostgresAuditRepository(AuditRepository):
             payload.get("tenant_id"),
             payload.get("input_summary"),
             payload.get("output_summary"),
-            payload.get("input_payload", {}),
-            payload.get("output_payload", {}),
+            _jsonb(payload.get("input_payload", {})),
+            _jsonb(payload.get("output_payload", {})),
             payload["status"],
             payload["system_success"],
             payload["execution_success"],
@@ -195,8 +203,8 @@ class PostgresAuditRepository(AuditRepository):
             payload.get("completion_tokens"),
             payload.get("total_tokens"),
             payload.get("estimated_cost"),
-            payload.get("tags", []),
-            payload.get("meta", {}),
+            _jsonb_list(payload.get("tags", [])),
+            _jsonb(payload.get("meta", {})),
         )
 
     async def insert_step(self, payload: dict[str, Any]) -> None:
@@ -246,8 +254,8 @@ class PostgresAuditRepository(AuditRepository):
             payload.get("target_name"),
             payload.get("input_summary"),
             payload.get("output_summary"),
-            payload.get("input_payload", {}),
-            payload.get("output_payload", {}),
+            _jsonb(payload.get("input_payload", {})),
+            _jsonb(payload.get("output_payload", {})),
             payload["status"],
             payload["success"],
             payload.get("error_code"),
@@ -255,8 +263,8 @@ class PostgresAuditRepository(AuditRepository):
             payload["started_at"],
             payload.get("finished_at"),
             payload.get("latency_ms"),
-            payload.get("token_usage", {}),
-            payload.get("meta", {}),
+            _jsonb(payload.get("token_usage", {})),
+            _jsonb(payload.get("meta", {})),
         )
 
     async def enqueue_eval(self, payload: dict[str, Any]) -> None:
@@ -278,7 +286,7 @@ class PostgresAuditRepository(AuditRepository):
             payload["status"],
             payload["attempts"],
             payload["available_at"],
-            payload["payload"],
+            _jsonb(payload["payload"]),
         )
 
     async def save_eval_result(self, payload: dict[str, Any]) -> None:
@@ -314,11 +322,11 @@ class PostgresAuditRepository(AuditRepository):
             payload.get("score_metric_consistency"),
             payload.get("score_actionability"),
             payload.get("score_safety_compliance"),
-            payload.get("issue_tags", []),
-            payload.get("findings", []),
-            payload.get("suggestions", []),
-            payload.get("evidence", []),
-            payload.get("raw_judge", {}),
+            _jsonb_list(payload.get("issue_tags", [])),
+            _jsonb_list(payload.get("findings", [])),
+            _jsonb_list(payload.get("suggestions", [])),
+            _jsonb_list(payload.get("evidence", [])),
+            _jsonb(payload.get("raw_judge", {})),
             payload["evaluated_at"],
             payload["latency_ms"],
         )
@@ -342,7 +350,7 @@ class PostgresAuditRepository(AuditRepository):
             event["event_type"],
             event.get("producer_service"),
             event["occurred_at"],
-            event["payload"],
+            _jsonb(event["payload"]),
         )
         return result != "INSERT 0 0"
 
@@ -382,7 +390,7 @@ class PostgresAuditRepository(AuditRepository):
             event["event_type"],
             event.get("producer_service"),
             event["occurred_at"],
-            event["payload"],
+            _jsonb(event["payload"]),
             error_message,
         )
 
@@ -527,7 +535,7 @@ class PostgresAuditRepository(AuditRepository):
             payload.get("close_reason"),
             payload.get("source_type"),
             payload.get("source_name"),
-            payload.get("meta", {}),
+            _jsonb(payload.get("meta", {})),
         )
 
     async def fetch_session(self, session_id: str) -> dict[str, Any] | None:
@@ -588,7 +596,7 @@ class PostgresAuditRepository(AuditRepository):
             payload["last_active_at"],
             payload.get("completed_at"),
             payload.get("closed_reason"),
-            payload.get("meta", {}),
+            _jsonb(payload.get("meta", {})),
         )
 
     async def fetch_task(self, task_id: str) -> dict[str, Any] | None:

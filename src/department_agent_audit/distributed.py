@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from copy import deepcopy
 from typing import Any, Awaitable, Callable
 
 from .audit import AuditContext, AuditLogger, utc_now
@@ -63,6 +64,7 @@ class ChildAgentAuditRunner:
             input_payload=input_payload,
             agent_call=_call,
         )
+        result = deepcopy(result)
 
         result["child_audit_context"] = {
             **asdict(context),

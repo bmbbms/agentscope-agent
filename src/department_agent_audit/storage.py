@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from typing import Any
@@ -142,23 +143,23 @@ class CollectingAuditRepository(AuditRepository):
         self.eval_results: list[dict[str, Any]] = []
 
     async def insert_invocation_start(self, payload: dict[str, Any]) -> None:
-        self.invocations[payload["run_id"]] = dict(payload)
+        self.invocations[payload["run_id"]] = deepcopy(payload)
 
     async def update_invocation_finish(self, run_id: str, payload: dict[str, Any]) -> None:
         existing = self.invocations.setdefault(run_id, {"run_id": run_id})
-        existing.update(payload)
+        existing.update(deepcopy(payload))
 
     async def save_completed_invocation(self, payload: dict[str, Any]) -> None:
-        self.invocations[payload["run_id"]] = dict(payload)
+        self.invocations[payload["run_id"]] = deepcopy(payload)
 
     async def insert_step(self, payload: dict[str, Any]) -> None:
-        self.steps.append(dict(payload))
+        self.steps.append(deepcopy(payload))
 
     async def enqueue_eval(self, payload: dict[str, Any]) -> None:
-        self.eval_queue.append(dict(payload))
+        self.eval_queue.append(deepcopy(payload))
 
     async def save_eval_result(self, payload: dict[str, Any]) -> None:
-        self.eval_results.append(dict(payload))
+        self.eval_results.append(deepcopy(payload))
 
     async def register_ingest_event(self, event: dict[str, Any]) -> bool:
         return True
@@ -185,7 +186,7 @@ class CollectingAuditRepository(AuditRepository):
 
     async def upsert_session(self, payload: dict[str, Any]) -> None:
         self.invocations.setdefault("__sessions__", {})
-        self.invocations["__sessions__"][payload["session_id"]] = dict(payload)
+        self.invocations["__sessions__"][payload["session_id"]] = deepcopy(payload)
 
     async def fetch_session(self, session_id: str) -> dict[str, Any] | None:
         sessions = self.invocations.get("__sessions__", {})
@@ -194,7 +195,7 @@ class CollectingAuditRepository(AuditRepository):
 
     async def upsert_task(self, payload: dict[str, Any]) -> None:
         self.invocations.setdefault("__tasks__", {})
-        self.invocations["__tasks__"][payload["task_id"]] = dict(payload)
+        self.invocations["__tasks__"][payload["task_id"]] = deepcopy(payload)
 
     async def fetch_task(self, task_id: str) -> dict[str, Any] | None:
         tasks = self.invocations.get("__tasks__", {})
@@ -265,8 +266,8 @@ class CollectingAuditRepository(AuditRepository):
         return stats
 
     def export_run_bundle(self, run_id: str) -> dict[str, Any]:
-        invocation = dict(self.invocations[run_id])
-        steps = [dict(step) for step in self.steps if step["run_id"] == run_id]
+        invocation = deepcopy(self.invocations[run_id])
+        steps = [deepcopy(step) for step in self.steps if step["run_id"] == run_id]
         return {
             "invocations": [invocation],
             "steps": steps,

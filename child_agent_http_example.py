@@ -30,7 +30,7 @@ async def invoke(payload: dict) -> dict:
 
         return {
             "reply": "昨日核心商户GMV下滑主要集中在华东餐饮，支付成功率也有同步下降，建议先查支付链路和曝光变化。",
-            "evidence": tool_result["facts"],
+            "evidence": list(tool_result["facts"]),
         }
 
     return await runner.run(
