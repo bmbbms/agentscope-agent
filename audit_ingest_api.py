@@ -4,6 +4,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from department_agent_audit.event_ingest import AuditIngestService
 from department_agent_audit.postgres_repository import PostgresAuditRepository
@@ -26,6 +27,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="department-agent-audit-ingest", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _validate_token(authorization: str | None) -> None:
@@ -65,6 +73,19 @@ async def list_dead_letters(
 async def replay_event(event_id: str, authorization: str | None = Header(default=None)) -> dict:
     _validate_token(authorization)
     return await app.state.ingest_service.replay_event(event_id)
+
+
+@app.get("/audit/sessions/stats")
+async def get_session_stats(
+    authorization: str | None = Header(default=None),
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> dict:
+    _validate_token(authorization)
+    return await app.state.session_manager.get_session_stats(
+        tenant_id=tenant_id,
+        user_id=user_id,
+    )
 
 
 @app.get("/audit/sessions/{session_id}")
@@ -115,17 +136,4 @@ async def list_sessions(
         user_id=user_id,
         limit=limit,
         offset=offset,
-    )
-
-
-@app.get("/audit/sessions/stats")
-async def get_session_stats(
-    authorization: str | None = Header(default=None),
-    tenant_id: str | None = None,
-    user_id: str | None = None,
-) -> dict:
-    _validate_token(authorization)
-    return await app.state.session_manager.get_session_stats(
-        tenant_id=tenant_id,
-        user_id=user_id,
     )
