@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: mvp-postgres
+    environment:
+      POSTGRES_DB: agent_audit
+      POSTGRES_USER: agent_user
+      POSTGRES_PASSWORD: agent_pass
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_user -d agent_audit"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - mvp_pg_data:/var/lib/postgresql/data
+
+  audit-ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mvp-audit-ingest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AGENT_AUDIT_PG_DSN: postgresql://agent_user:agent_pass@postgres:5432/agent_audit
+      AUDIT_INGEST_TOKEN: ingest-token
+      PYTHONPATH: /app/src
+      AUDIT_SCHEMA_SQL_PATH: /app/sql/audit_schema.sql
+    command: >
+      sh -c "python /app/scripts/wait_for_postgres.py &&
+             uvicorn audit_ingest_api:app --host 0.0.0.0 --port 8081"
+    ports:
+      - "8081:8081"
+
+  child-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mvp-child-agent
+    depends_on:
+      audit-ingest:
+        condition: service_started
+    environment:
+      PYTHONPATH: /app/src
+    command: uvicorn child_agent_http_example:app --host 0.0.0.0 --port 8091
+    ports:
+      - "8091:8091"
+
+  main-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mvp-main-agent
+    depends_on:
+      audit-ingest:
+        condition: service_started
+      child-agent:
+        condition: service_started
+    environment:
+      AGENT_AUDIT_PG_DSN: postgresql://agent_user:agent_pass@postgres:5432/agent_audit
+      MAIN_AGENT_API_TOKEN: main-token
+      AUDIT_INGEST_URL: http://audit-ingest:8081/audit/events
+      AUDIT_INGEST_TOKEN: ingest-token
+      MERCHANT_REMOTE_AGENTS_JSON: >
+        [{"name":"diagnosis","protocol":"http","url":"http://child-agent:8091/invoke"},
+         {"name":"metric_definition","protocol":"http","url":"http://child-agent:8091/invoke"},
+         {"name":"report","protocol":"http","url":"http://child-agent:8091/invoke"}]
+      PYTHONPATH: /app/src
+      AUDIT_SCHEMA_SQL_PATH: /app/sql/audit_schema.sql
+    command: >
+      sh -c "python /app/scripts/wait_for_postgres.py &&
+             uvicorn main_agent_http_api:app --host 0.0.0.0 --port 8090"
+    ports:
+      - "8090:8090"
+
+volumes:
+  mvp_pg_data:
