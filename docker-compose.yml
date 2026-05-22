@@ -70,6 +70,25 @@ services:
     ports:
       - "8092:8092"
 
+  data-query-child-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mvp-data-query-child-agent
+    depends_on:
+      audit-ingest:
+        condition: service_started
+    environment:
+      PYTHONPATH: /app/src
+      SUPERSET_BASE_URL: ${SUPERSET_BASE_URL:-}
+      SUPERSET_USERNAME: ${SUPERSET_USERNAME:-}
+      SUPERSET_PASSWORD: ${SUPERSET_PASSWORD:-}
+      SUPERSET_PASSWORD_ENCRYPTED: ${SUPERSET_PASSWORD_ENCRYPTED:-}
+      SUPERSET_SCHEMA_DIR: ${SUPERSET_SCHEMA_DIR:-/app/superset_data_query/BI数据表结构全量}
+    command: uvicorn data_query_child_agent_http_api:app --host 0.0.0.0 --port 8093
+    ports:
+      - "8093:8093"
+
   main-agent:
     build:
       context: .
@@ -82,6 +101,8 @@ services:
         condition: service_started
       report-child-agent:
         condition: service_started
+      data-query-child-agent:
+        condition: service_started
     environment:
       AGENT_AUDIT_PG_DSN: postgresql://agent_user:agent_pass@postgres:5432/agent_audit
       MAIN_AGENT_API_TOKEN: main-token
@@ -90,7 +111,8 @@ services:
       MERCHANT_REMOTE_AGENTS_JSON: >
         [{"name":"diagnosis","protocol":"http","url":"http://child-agent:8091/invoke"},
          {"name":"metric_definition","protocol":"http","url":"http://child-agent:8091/invoke"},
-         {"name":"report","protocol":"http","url":"http://report-child-agent:8092/invoke"}]
+         {"name":"report","protocol":"http","url":"http://report-child-agent:8092/invoke","timeout_seconds":180},
+         {"name":"data_query","protocol":"http","url":"http://data-query-child-agent:8093/invoke","timeout_seconds":180}]
       PYTHONPATH: /app/src
       AUDIT_SCHEMA_SQL_PATH: /app/sql/audit_schema.sql
     command: >

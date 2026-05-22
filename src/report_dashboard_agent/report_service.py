@@ -43,6 +43,8 @@ class ReportDashboardGenerator:
     def generate(self, spec: ReportRequestSpec) -> dict[str, Any]:
         output_dir = Path(spec.output_dir) if spec.output_dir else self.output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
+        normalized_type = (spec.dashboard_type or "both").lower()
+        selected_types = self._resolve_dashboard_types(normalized_type)
 
         fetcher = create_data_fetcher(
             {
@@ -53,19 +55,20 @@ class ReportDashboardGenerator:
             }
         )
         try:
-            large_pos_data = fetcher.fetch_large_pos_dashboard(spec.stat_month)
-            small_pos_data = fetcher.fetch_small_pos_dashboard(spec.stat_month)
+            dashboard_data_map: dict[str, dict[str, Any]] = {}
+            if "large_pos" in selected_types:
+                dashboard_data_map["large_pos"] = fetcher.fetch_large_pos_dashboard(spec.stat_month)
+            if "small_pos" in selected_types:
+                dashboard_data_map["small_pos"] = fetcher.fetch_small_pos_dashboard(spec.stat_month)
         finally:
             if hasattr(fetcher, "close"):
                 fetcher.close()
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        normalized_type = (spec.dashboard_type or "both").lower()
-        selected_types = self._resolve_dashboard_types(normalized_type)
 
         artifacts: list[dict[str, Any]] = []
         for dashboard_key in selected_types:
-            dashboard_data = large_pos_data if dashboard_key == "large_pos" else small_pos_data
+            dashboard_data = dashboard_data_map[dashboard_key]
             html_content = self._generate_html(dashboard_key, dashboard_data)
             latest_month = dashboard_data.get("latest_month") or spec.stat_month or "unknown"
             label = self._dashboard_label(dashboard_key)

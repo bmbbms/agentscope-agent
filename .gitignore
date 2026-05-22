@@ -4,3 +4,5 @@ __pycache__/
 .DS_Store
 frontend-dashboard/.env
 report_dashboard/output/
+superset_data_query/output/
+superset_data_query/column_mapping_cache.json

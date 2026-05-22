@@ -16,6 +16,29 @@ from .tools import MerchantDataTools
 def _route_by_rule(query: str) -> str:
     lowered = query.lower()
     metric_markers = ["metric", "definition", "formula", "dimension", "calculation"]
+    data_query_markers = [
+        "sql",
+        "select ",
+        " from ",
+        "database",
+        "schema",
+        "table",
+        "column",
+        "field",
+        "export excel",
+        "superset",
+        "data query",
+        "数据查询",
+        "查数",
+        "查库",
+        "查表",
+        "字段",
+        "表结构",
+        "数据库",
+        "执行sql",
+        "导出excel",
+        "superset查询",
+    ]
     report_markers = [
         "report",
         "summary",
@@ -34,6 +57,8 @@ def _route_by_rule(query: str) -> str:
     ]
     if any(marker in lowered for marker in metric_markers):
         return "metric_definition"
+    if any(marker in lowered for marker in data_query_markers):
+        return "data_query"
     if any(marker in lowered for marker in report_markers):
         return "report"
     return "diagnosis"
@@ -60,6 +85,7 @@ class MerchantDepartmentApp:
         task_id: str | None = None,
         topic: str | None = None,
         user_explicitly_closed: bool = False,
+        extra_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         route = _route_by_rule(query)
         agent_name = self._agent_name_for_route(route)
@@ -93,12 +119,60 @@ class MerchantDepartmentApp:
         if task is not None:
             context.task_id = task.task_id
 
-        if self.remote_registry is not None:
-            result = await self.remote_registry.invoke_with_audit(
-                route=route,
-                query=query,
-                context=context,
-                audit_logger=self.audit_logger,
+        try:
+            if self.remote_registry is not None:
+                result = await self.remote_registry.invoke_with_audit(
+                    route=route,
+                    query=query,
+                    context=context,
+                    audit_logger=self.audit_logger,
+                    extra_payload=extra_payload if route == "data_query" else None,
+                )
+                return await self._finalize_response(
+                    result=result,
+                    session=session,
+                    task=task,
+                    context=context,
+                    trigger_type=trigger_type,
+                    user_explicitly_closed=user_explicitly_closed,
+                )
+
+            async def _call() -> dict[str, Any]:
+                if self.tools is None:
+                    raise RuntimeError("Local tool mode is disabled and no remote registry is configured.")
+                if route == "metric_definition":
+                    tool_result = await self.tools.explain_metric_definition(query)
+                    return {
+                        "route": route,
+                        "reply": tool_result["definition"],
+                        "tool_result": tool_result,
+                    }
+                if route == "report":
+                    facts = [{"source": "placeholder", "detail": "Replace with real analysis output"}]
+                    tool_result = await self.tools.build_report(query, facts)
+                    return {
+                        "route": route,
+                        "reply": tool_result["report"],
+                        "tool_result": tool_result,
+                    }
+                if route == "data_query":
+                    return {
+                        "route": route,
+                        "reply": "Local data_query mode is not implemented. Configure the remote data_query child agent.",
+                        "tool_result": {"query": query, "route": route},
+                    }
+                tool_result = await self.tools.diagnose_metric_drop(query)
+                return {
+                    "route": route,
+                    "reply": tool_result["summary"],
+                    "tool_result": tool_result,
+                }
+
+            result = await self.audit_logger.invoke_with_audit(
+                context,
+                agent_name=agent_name,
+                input_payload={"query": query, "route": route},
+                agent_call=_call,
             )
             return await self._finalize_response(
                 result=result,
@@ -108,46 +182,15 @@ class MerchantDepartmentApp:
                 trigger_type=trigger_type,
                 user_explicitly_closed=user_explicitly_closed,
             )
-
-        async def _call() -> dict[str, Any]:
-            if self.tools is None:
-                raise RuntimeError("Local tool mode is disabled and no remote registry is configured.")
-            if route == "metric_definition":
-                tool_result = await self.tools.explain_metric_definition(query)
-                return {
-                    "route": route,
-                    "reply": tool_result["definition"],
-                    "tool_result": tool_result,
-                }
-            if route == "report":
-                facts = [{"source": "placeholder", "detail": "Replace with real analysis output"}]
-                tool_result = await self.tools.build_report(query, facts)
-                return {
-                    "route": route,
-                    "reply": tool_result["report"],
-                    "tool_result": tool_result,
-                }
-            tool_result = await self.tools.diagnose_metric_drop(query)
-            return {
-                "route": route,
-                "reply": tool_result["summary"],
-                "tool_result": tool_result,
-            }
-
-        result = await self.audit_logger.invoke_with_audit(
-            context,
-            agent_name=agent_name,
-            input_payload={"query": query, "route": route},
-            agent_call=_call,
-        )
-        return await self._finalize_response(
-            result=result,
-            session=session,
-            task=task,
-            context=context,
-            trigger_type=trigger_type,
-            user_explicitly_closed=user_explicitly_closed,
-        )
+        except Exception as exc:
+            await self._finalize_failure(
+                session=session,
+                task=task,
+                context=context,
+                trigger_type=trigger_type,
+                error=exc,
+            )
+            raise
 
     async def run_eval_once(self, worker_id: str = "merchant-eval-worker-1") -> Any:
         return await self.eval_worker.run_once(worker_id=worker_id)
@@ -158,6 +201,7 @@ class MerchantDepartmentApp:
             "metric_definition": "metric_definition_agent",
             "diagnosis": "merchant_diagnosis_agent",
             "report": "report_agent",
+            "data_query": "superset_data_query_agent",
         }
         return mapping[route]
 
@@ -185,6 +229,31 @@ class MerchantDepartmentApp:
         result["task"] = lifecycle["task"]
         result["lifecycle_decision"] = lifecycle["decision"]
         return result
+
+    async def _finalize_failure(
+        self,
+        *,
+        session: Any,
+        task: Any,
+        context: AuditContext,
+        trigger_type: str,
+        error: Exception,
+    ) -> None:
+        if self.session_manager is None or session is None or task is None:
+            return
+        task.meta = {
+            **dict(task.meta),
+            "last_error_type": type(error).__name__,
+            "last_error_message": str(error),
+        }
+        await self.session_manager.finalize_run(
+            session=session,
+            task=task,
+            run_id=context.run_id,
+            run_status="failed",
+            trigger_type=trigger_type,
+            user_explicitly_closed=False,
+        )
 
 
 def build_eval_worker(repository: Any, agents: MerchantAgents) -> EvalWorker:

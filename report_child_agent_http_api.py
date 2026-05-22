@@ -17,7 +17,7 @@ def _build_request_spec(payload: dict[str, Any]) -> ReportRequestSpec:
     output_format = str(payload.get("format", "pdf")).lower()
     generate_pdf = output_format in {"pdf", "both"}
     generate_html = bool(payload.get("generate_html", output_format in {"html", "both"}))
-    dashboard_type = str(payload.get("dashboard_type", "both")).lower()
+    dashboard_type = str(payload.get("dashboard_type", "large_pos")).lower()
     return ReportRequestSpec(
         query=payload["query"],
         stat_month=payload.get("stat_month"),

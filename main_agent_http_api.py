@@ -59,6 +59,28 @@ def _validate_token(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid main agent token")
 
 
+def _extract_data_query_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed_fields = (
+        "action",
+        "sql",
+        "database_name",
+        "preview_rows",
+        "enable_mask",
+        "export_excel",
+        "export_name",
+        "schema_keyword",
+        "search_limit",
+        "output_dir",
+        "timeout_seconds",
+        "list_databases",
+    )
+    return {
+        field: payload[field]
+        for field in allowed_fields
+        if field in payload and payload[field] is not None
+    }
+
+
 @app.post("/main/query")
 async def main_query(request: Request, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     _validate_token(authorization)
@@ -71,6 +93,7 @@ async def main_query(request: Request, authorization: str | None = Header(defaul
     task_id = payload.get("task_id")
     topic = payload.get("topic")
     user_explicitly_closed = bool(payload.get("user_explicitly_closed", False))
+    extra_payload = _extract_data_query_payload(payload)
 
     result = await app.state.agent_app.handle_query(
         query=query,
@@ -82,6 +105,7 @@ async def main_query(request: Request, authorization: str | None = Header(defaul
         task_id=task_id,
         topic=topic,
         user_explicitly_closed=user_explicitly_closed,
+        extra_payload=extra_payload or None,
     )
     return result
 
