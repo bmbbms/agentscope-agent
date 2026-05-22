@@ -80,6 +80,9 @@ services:
         condition: service_started
     environment:
       PYTHONPATH: /app/src
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      AGENTSCOPE_MODEL_NAME: ${AGENTSCOPE_MODEL_NAME:-gpt-4o-mini}
       SUPERSET_BASE_URL: ${SUPERSET_BASE_URL:-}
       SUPERSET_USERNAME: ${SUPERSET_USERNAME:-}
       SUPERSET_PASSWORD: ${SUPERSET_PASSWORD:-}
@@ -106,6 +109,9 @@ services:
     environment:
       AGENT_AUDIT_PG_DSN: postgresql://agent_user:agent_pass@postgres:5432/agent_audit
       MAIN_AGENT_API_TOKEN: main-token
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      AGENTSCOPE_MODEL_NAME: ${AGENTSCOPE_MODEL_NAME:-gpt-4o-mini}
       AUDIT_INGEST_URL: http://audit-ingest:8081/audit/events
       AUDIT_INGEST_TOKEN: ingest-token
       MERCHANT_REMOTE_AGENTS_JSON: >
