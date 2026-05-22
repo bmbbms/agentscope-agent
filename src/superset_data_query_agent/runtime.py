@@ -49,7 +49,7 @@ class AgentScopeDataQueryWorkflow:
         guard = self._get_guard_agent()
 
         planner_prompt = self._build_planner_prompt(spec)
-        planner_output = self._parse_json_reply(await planner(planner_prompt))
+        planner_output = self._parse_json_reply(await self._invoke_agent(planner, planner_prompt))
 
         action = str(planner_output.get("action") or spec.action).strip().lower() or "schema_search"
         should_execute = bool(planner_output.get("should_execute", action != "schema_search"))
@@ -88,7 +88,7 @@ class AgentScopeDataQueryWorkflow:
             sql=planned_sql,
             database_name=database_name,
         )
-        guard_output = self._parse_json_reply(await guard(guard_prompt))
+        guard_output = self._parse_json_reply(await self._invoke_agent(guard, guard_prompt))
         approved = bool(guard_output.get("approved", False))
         safe_sql = guard_output.get("safe_sql") or planned_sql
 
@@ -222,6 +222,18 @@ class AgentScopeDataQueryWorkflow:
             formatter=OpenAIChatFormatter(),
             memory=InMemoryMemory(),
             toolkit=Toolkit(),
+        )
+
+    @staticmethod
+    async def _invoke_agent(agent: Any, prompt: str) -> Any:
+        from agentscope.message import Msg
+
+        return await agent(
+            Msg(
+                name="data_query_user",
+                role="user",
+                content=prompt,
+            )
         )
 
     @staticmethod
