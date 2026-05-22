@@ -7,6 +7,20 @@ from superset_data_query_agent import AgentScopeDataQueryWorkflow, SupersetQuery
 
 
 class AgentScopeDataQueryWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    def test_parse_json_reply_supports_list_payloads(self) -> None:
+        class _FakeMsg:
+            def __init__(self, content):
+                self.content = content
+
+        reply = [
+            _FakeMsg("thinking..."),
+            _FakeMsg('{"action":"schema_search","should_execute":false}'),
+        ]
+
+        parsed = AgentScopeDataQueryWorkflow._parse_json_reply(reply)
+
+        self.assertEqual(parsed["action"], "schema_search")
+
     async def test_fallback_guard_blocks_select_star(self) -> None:
         service = Mock()
         workflow = AgentScopeDataQueryWorkflow(service)

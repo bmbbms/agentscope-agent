@@ -269,16 +269,48 @@ class AgentScopeDataQueryWorkflow:
 
     @staticmethod
     def _parse_json_reply(reply: Any) -> dict[str, Any]:
-        if isinstance(reply, str):
-            text = reply
-        else:
-            text = getattr(reply, "content", str(reply))
+        text = AgentScopeDataQueryWorkflow._extract_text(reply)
         text = text.strip()
         if text.startswith("```"):
             text = text.strip("`")
             if text.lower().startswith("json"):
                 text = text[4:].strip()
         return json.loads(text)
+
+    @staticmethod
+    def _extract_text(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="ignore")
+        if isinstance(value, list):
+            extracted_parts = [AgentScopeDataQueryWorkflow._extract_text(item).strip() for item in value]
+            extracted_parts = [part for part in extracted_parts if part]
+            if not extracted_parts:
+                return ""
+            # Agent runtimes often append assistant outputs at the end of a message list.
+            return extracted_parts[-1]
+        if isinstance(value, dict):
+            for key in ("content", "text", "message", "output"):
+                if key in value:
+                    extracted = AgentScopeDataQueryWorkflow._extract_text(value[key]).strip()
+                    if extracted:
+                        return extracted
+            return json.dumps(value, ensure_ascii=False)
+
+        content = getattr(value, "content", None)
+        if content is not None:
+            extracted = AgentScopeDataQueryWorkflow._extract_text(content).strip()
+            if extracted:
+                return extracted
+
+        text = getattr(value, "text", None)
+        if text is not None:
+            extracted = AgentScopeDataQueryWorkflow._extract_text(text).strip()
+            if extracted:
+                return extracted
+
+        return str(value)
 
     @staticmethod
     def _fallback_plan(spec: SupersetQueryRequestSpec) -> dict[str, Any]:
